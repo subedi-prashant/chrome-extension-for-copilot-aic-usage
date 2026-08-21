@@ -1,14 +1,24 @@
 {
   "manifest_version": 3,
   "name": "Copilot Usage Monitor",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Tracks your GitHub Copilot premium request usage (quota consumed vs. monthly allowance).",
-  "permissions": ["storage", "alarms"],
-  "host_permissions": ["https://api.github.com/*"],
+  "permissions": ["storage", "alarms", "scripting", "tabs"],
+  "host_permissions": [
+    "https://api.github.com/*",
+    "https://github.com/*"
+  ],
   "background": {
     "service_worker": "background/service-worker.js",
     "type": "module"
   },
+  "content_scripts": [
+    {
+      "matches": ["https://github.com/settings/copilot*"],
+      "js": ["content/content-script.js"],
+      "run_at": "document_idle"
+    }
+  ],
   "action": {
     "default_popup": "popup/popup.html",
     "default_icon": {

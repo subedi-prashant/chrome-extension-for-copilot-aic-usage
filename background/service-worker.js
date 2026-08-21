@@ -1,8 +1,9 @@
 import { readState, updateState } from '../shared/storage.js';
 import {
-  getAuthenticatedUser, getCopilotPlan,
+  getAuthenticatedUser, getCopilotPlan, getUserCopilotUsage,
   getPremiumRequestUsage, getAiCreditUsage, getGeneralUsageFallback,
   getOrgAiCreditUsage, getOrgPremiumRequestUsage,
+  scrapeSettingsPageViaFetch,
 } from '../shared/api.js';
 import {
   ALARM_NAME,
@@ -39,14 +40,17 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   }
 });
 
-// ── Message handler (from popup / options) ──────────────────────────────────
+// ── Auto-tab tracking (module-level, survives within one SW instance) ────────
+var _autoTabId = null;
+
+// ── Message handler (from popup / options / content script) ─────────────────
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === 'FORCE_FETCH') {
     fetchAndCache()
       .then(() => sendResponse({ success: true }))
       .catch((e) => sendResponse({ success: false, error: e.message }));
-    return true; // async response
+    return true;
   }
 
   if (message.type === 'SETTINGS_CHANGED') {
@@ -54,6 +58,35 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       .then(() => sendResponse({ success: true }))
       .catch((e) => sendResponse({ success: false, error: e.message }));
     return true;
+  }
+
+  if (message.type === 'SCRAPE_RESULT') {
+    var d = message.data;
+    if (d && d.used !== null && d.used !== undefined) {
+      var tabId = _sender && _sender.tab ? _sender.tab.id : null;
+
+      updateState({
+        status: 'ok',
+        used: d.used,
+        unitType: d.unitType || 'credit',
+        allowance: d.allowance || null,
+        cycleStart: d.cycleStart || null,
+        resetDate: d.cycleEnd || null,
+        fetchedAt: d.scrapedAt || Date.now(),
+        source: 'scrape',
+        errorMessage: null,
+      }).then(function() {
+        return updateBadge({ status: 'ok', used: d.used, allowance: d.allowance || null });
+      }).then(function() {
+        // Close the auto-opened background tab if this result came from it
+        if (tabId !== null && tabId === _autoTabId) {
+          _autoTabId = null;
+          chrome.tabs.remove(tabId).catch(function() {});
+        }
+      }).catch(function() {});
+    }
+    sendResponse({ received: true });
+    return false;
   }
 });
 
@@ -92,72 +125,120 @@ export async function fetchAndCache() {
     const org = state.org || null;
     let usageResult;
 
-    if (org) {
-      // ── Org-managed license path ─────────────────────────────────────────
-      try {
-        usageResult = await getOrgAiCreditUsage(pat, org, username, year, month);
-      } catch (e1) {
-        if (e1.status !== 404) throw e1;
-        try {
-          usageResult = await getOrgPremiumRequestUsage(pat, org, username, year, month);
-        } catch (e2) {
-          if (e2.status !== 404) throw e2;
-          // Both 404 → enhanced billing platform not enabled OR not an org admin
-          const billingErr = new Error('BILLING_UNAVAILABLE');
-          billingErr.status = 404;
-          billingErr.isBillingUnavailable = true;
-          throw billingErr;
-        }
+    // ── Step 0: Fetch the settings page HTML directly (works for all plan types
+    //   including org-managed users). Falls back to billing API cascade if it fails.
+    try {
+      var pageResult = await scrapeSettingsPageViaFetch(pat);
+      if (pageResult && pageResult.used !== null && pageResult.used !== undefined) {
+        usageResult = {
+          totalUsed: pageResult.used,
+          usageItems: [],
+          unitType: pageResult.unitType || 'credit',
+          allowance: pageResult.allowance || null,
+          cycleStart: pageResult.cycleStart,
+          cycleEnd: pageResult.cycleEnd,
+          source: 'page',
+        };
       }
-    } else {
-      // ── Personal license path ─────────────────────────────────────────────
+    } catch (e0) {
+      if (e0.status === 401 || e0.status === 403) throw e0;
+      // Page fetch failed — continue to API cascade
+    }
+
+    // ── Step 1: Undocumented personal usage API (if Step 0 got nothing)
+    if (!usageResult) {
       try {
-        usageResult = await getPremiumRequestUsage(pat, username, year, month);
+        const personal = await getUserCopilotUsage(pat);
+        usageResult = {
+          totalUsed: personal.totalUsed,
+          usageItems: [],
+          unitType: 'credit',
+          cycleStart: personal.cycleStart,
+          cycleEnd: personal.cycleEnd,
+          source: 'api',
+        };
       } catch (e1) {
-        if (e1.status !== 404) throw e1;
+        if (e1.status === 401 || e1.status === 403) throw e1;
+        // 404 → fall through
+      }
+    }
+
+    // ── Step 2: Billing API cascade (if still nothing)
+    if (!usageResult) {
+      if (org) {
         try {
-          usageResult = await getAiCreditUsage(pat, username, year, month);
-        } catch (e2) {
-          if (e2.status !== 404) throw e2;
+          usageResult = await getOrgAiCreditUsage(pat, org, username, year, month);
+        } catch (e1) {
+          if (e1.status !== 404) throw e1;
           try {
-            usageResult = await getGeneralUsageFallback(pat, username, year, month);
-          } catch (e3) {
-            if (e3.status !== 404) throw e3;
-            const billingErr = new Error('BILLING_UNAVAILABLE');
+            usageResult = await getOrgPremiumRequestUsage(pat, org, username, year, month);
+          } catch (e2) {
+            if (e2.status !== 404) throw e2;
+            var billingErr = new Error('BILLING_UNAVAILABLE');
             billingErr.status = 404;
             billingErr.isBillingUnavailable = true;
             throw billingErr;
           }
         }
-      }
-
-      if (usageResult.unitType === 'request' && usageResult.totalUsed === 0 && usageResult.usageItems.length === 0) {
+      } else {
         try {
-          const aiResult = await getAiCreditUsage(pat, username, year, month);
-          if (aiResult.totalUsed > 0) usageResult = aiResult;
-        } catch (e) { /* ignore */ }
+          usageResult = await getPremiumRequestUsage(pat, username, year, month);
+        } catch (e1) {
+          if (e1.status !== 404) throw e1;
+          try {
+            usageResult = await getAiCreditUsage(pat, username, year, month);
+          } catch (e2) {
+            if (e2.status !== 404) throw e2;
+            try {
+              usageResult = await getGeneralUsageFallback(pat, username, year, month);
+            } catch (e3) {
+              if (e3.status !== 404) throw e3;
+              var billingErr2 = new Error('BILLING_UNAVAILABLE');
+              billingErr2.status = 404;
+              billingErr2.isBillingUnavailable = true;
+              throw billingErr2;
+            }
+          }
+        }
+        if (usageResult && usageResult.unitType === 'request' && usageResult.totalUsed === 0 && (!usageResult.usageItems || usageResult.usageItems.length === 0)) {
+          try {
+            var aiResult = await getAiCreditUsage(pat, username, year, month);
+            if (aiResult.totalUsed > 0) usageResult = aiResult;
+          } catch (e) { /* ignore */ }
+        }
       }
     }
 
     // allowance: null means unlimited / no cap set
     const allowance = usageResult.unitType === 'credit'
-      ? null  // AI credits have no fixed monthly cap (org-configured)
+      ? null
       : (PLAN_ALLOWANCES[plan] || PLAN_ALLOWANCES.unknown);
 
-    const resetDate = getResetDate(now);
+    // Use real cycle end date from API if available, otherwise approximate
+    var resetDate;
+    if (usageResult.cycleEnd) {
+      resetDate = new Date(usageResult.cycleEnd);
+    } else {
+      resetDate = getResetDate(now);
+    }
+
+    // Use real cycle start if available
+    var cycleStart = usageResult.cycleStart || null;
 
     const cachePayload = {
       status: 'ok',
       username,
       plan,
       used: usageResult.totalUsed,
-      allowance,                       // null = unlimited
-      unitType: usageResult.unitType,  // 'request' | 'credit'
-      usageItems: usageResult.usageItems,
+      allowance,
+      unitType: usageResult.unitType,
+      usageItems: usageResult.usageItems || [],
+      source: usageResult.source || 'api',
       fetchedAt: Date.now(),
       year,
       month,
       resetDate: resetDate.toISOString(),
+      cycleStart: cycleStart,
       errorMessage: null,
     };
 
@@ -166,7 +247,12 @@ export async function fetchAndCache() {
   } catch (err) {
     var status = 'error';
     if (err.status === 401 || err.status === 403) status = 'auth_error';
-    else if (err.isBillingUnavailable) status = 'billing_unavailable';
+    else if (err.isBillingUnavailable) {
+      // Billing APIs unavailable — try opening the settings page in background
+      // so the content script can scrape it silently.
+      status = 'billing_unavailable';
+      openBackgroundTab();
+    }
     const errorPayload = {
       status: status,
       errorMessage: err.message,
@@ -175,6 +261,28 @@ export async function fetchAndCache() {
     await updateState(errorPayload);
     await updateBadge(errorPayload);
   }
+}
+
+// ── Background tab helper ────────────────────────────────────────────────────
+// Opens github.com/settings/copilot in a background tab so the content script
+// can scrape usage data without requiring user navigation.
+function openBackgroundTab() {
+  // Don't open another tab if one is already pending
+  if (_autoTabId !== null) return;
+
+  chrome.tabs.create({
+    url: 'https://github.com/settings/copilot',
+    active: false,
+  }).then(function(tab) {
+    _autoTabId = tab.id;
+    // Safety: close the tab after 30s in case scraping doesn't complete
+    setTimeout(function() {
+      if (_autoTabId === tab.id) {
+        _autoTabId = null;
+        chrome.tabs.remove(tab.id).catch(function() {});
+      }
+    }, 30000);
+  }).catch(function() {});
 }
 
 // ── Badge update ────────────────────────────────────────────────────────────

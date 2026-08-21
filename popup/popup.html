@@ -33,15 +33,14 @@
 
       <!-- State: billing API unavailable (enhanced billing platform / not org admin) -->
       <div id="state-billing-unavailable" class="state hidden">
-        <div class="empty-icon">🔒</div>
+        <div class="empty-icon">⏳</div>
         <p class="empty-msg">
-          GitHub's billing API is not accessible. This usually means:
+          Auto-fetching your usage data in the background…
         </p>
-        <ul class="reason-list">
-          <li>Your org hasn't enabled the <strong>Enhanced Billing Platform</strong>, <strong>OR</strong></li>
-          <li>You're not an <strong>org owner / billing manager</strong></li>
-        </ul>
-        <a class="btn btn-primary" id="btn-view-github" href="https://github.com/settings/billing" target="_blank">View Usage on GitHub ↗</a>
+        <p class="empty-msg" style="font-size:11px;opacity:0.7;">
+          A GitHub tab will open briefly and close automatically. This happens once per refresh cycle.
+        </p>
+        <a class="btn btn-primary" id="btn-view-github" href="https://github.com/settings/copilot" target="_blank">Open GitHub Manually ↗</a>
       </div>
 
       <!-- State: generic error -->
@@ -53,6 +52,8 @@
 
       <!-- State: normal usage display -->
       <div id="state-ok" class="state hidden">
+        <!-- Source notice -->
+        <div id="scrape-notice" class="banner info hidden"></div>
         <!-- Org-managed warning banner -->
         <div id="org-managed-warning" class="banner warning hidden">
           ⚠️ Org-managed license detected. Add your org name in <a href="#" id="org-settings-link">Settings</a> to see usage.
@@ -79,7 +80,7 @@
             <span class="meta-value" id="meta-plan">–</span>
           </div>
           <div class="meta-row">
-            <span class="meta-label">Resets</span>
+            <span class="meta-label">Cycle</span>
             <span class="meta-value" id="meta-reset">–</span>
           </div>
           <div class="meta-row">

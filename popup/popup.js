@@ -24,9 +24,13 @@ async function render() {
   }
 
   // Billing API unavailable (enhanced billing platform / not org admin)
+  // BUT if we have scrape/page data, show that instead
   if (state.status === 'billing_unavailable') {
-    $('state-billing-unavailable').classList.remove('hidden');
-    return;
+    if ((state.source !== 'scrape' && state.source !== 'page') || !state.used) {
+      $('state-billing-unavailable').classList.remove('hidden');
+      return;
+    }
+    // Fall through — show ok state with scrape/page data
   }
 
   // Generic error
@@ -38,6 +42,18 @@ async function render() {
 
   // Normal display (status === 'ok' or still loading with cached data)
   $('state-ok').classList.remove('hidden');
+
+  // Show data-source notice
+  const scrapeNotice = $('scrape-notice');
+  if (state.source === 'scrape') {
+    scrapeNotice.textContent = '📋 Data read from your open GitHub tab. Auto-refreshed when you visit github.com/settings/copilot.';
+    scrapeNotice.classList.remove('hidden');
+  } else if (state.source === 'page') {
+    scrapeNotice.textContent = '🔄 Data fetched in background from GitHub settings. Auto-refreshes every 30 min.';
+    scrapeNotice.classList.remove('hidden');
+  } else {
+    scrapeNotice.classList.add('hidden');
+  }
 
   const used = state.used ?? 0;
   const allowance = state.allowance;           // null = unlimited
@@ -79,12 +95,21 @@ async function render() {
 
   $('meta-plan').textContent = PLAN_LABELS[state.plan] || 'Unknown Plan';
 
-  if (state.resetDate) {
+  if (state.cycleStart && state.resetDate) {
+    // Show full cycle range like GitHub does: "August 1-31, 2026"
+    const start = new Date(state.cycleStart);
+    const end = new Date(state.resetDate);
+    const now = new Date();
+    const daysLeft = Math.ceil((end - now) / (1000 * 60 * 60 * 24));
+    const startStr = start.toLocaleDateString(undefined, { month: 'long', day: 'numeric' });
+    const endStr = end.toLocaleDateString(undefined, { day: 'numeric', year: 'numeric' });
+    $('meta-reset').textContent = startStr + '-' + endStr + ' (' + daysLeft + 'd left)';
+  } else if (state.resetDate) {
     const reset = new Date(state.resetDate);
     const now = new Date();
     const daysLeft = Math.ceil((reset - now) / (1000 * 60 * 60 * 24));
     const resetStr = reset.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-    $('meta-reset').textContent = `${resetStr} (${daysLeft}d)`;
+    $('meta-reset').textContent = resetStr + ' (' + daysLeft + 'd)';
   } else {
     $('meta-reset').textContent = '–';
   }
@@ -143,4 +168,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Link in org-managed warning banner
   const orgLink = $('org-settings-link');
   if (orgLink) orgLink.addEventListener('click', (e) => { e.preventDefault(); chrome.runtime.openOptionsPage(); });
+
+  // Auto-re-render when storage changes (e.g. background tab scrape completes)
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local') render();
+  });
 });

@@ -1,23 +1,26 @@
 import { GITHUB_API_BASE, API_VERSION_HEADER } from './constants.js';
 
-async function githubFetch(path, pat, params) {
-  const url = new URL(GITHUB_API_BASE + path);
+var GITHUB_WEB_BASE = 'https://github.com';
+
+async function githubFetch(path, pat, params, apiVersion) {
+  var url = new URL(GITHUB_API_BASE + path);
   if (params) {
-    for (const [k, v] of Object.entries(params)) {
+    for (var _i = 0, _e = Object.entries(params); _i < _e.length; _i++) {
+      var k = _e[_i][0], v = _e[_i][1];
       if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
     }
   }
 
-  const response = await fetch(url.toString(), {
+  var response = await fetch(url.toString(), {
     headers: {
       Authorization: 'Bearer ' + pat,
       Accept: 'application/vnd.github+json',
-      'X-GitHub-Api-Version': API_VERSION_HEADER,
+      'X-GitHub-Api-Version': apiVersion || API_VERSION_HEADER,
     },
   });
 
   if (!response.ok) {
-    const err = new Error('GitHub API error: ' + response.status + ' ' + response.statusText);
+    var err = new Error('GitHub API error: ' + response.status + ' ' + response.statusText);
     err.status = response.status;
     throw err;
   }
@@ -27,6 +30,120 @@ async function githubFetch(path, pat, params) {
 
 function sumGrossQuantity(items) {
   return Math.round(items.reduce(function(sum, item) { return sum + (item.grossQuantity || 0); }, 0));
+}
+
+/**
+ * Fetch github.com/settings/copilot HTML using the PAT and extract usage data
+ * from the embedded server-side JSON (__NEXT_DATA__ or similar script tags).
+ * This works for any Copilot plan including org-managed users.
+ */
+export async function scrapeSettingsPageViaFetch(pat) {
+  var response = await fetch(GITHUB_WEB_BASE + '/settings/copilot', {
+    headers: {
+      Authorization: 'token ' + pat,
+      Accept: 'text/html,application/xhtml+xml',
+      'User-Agent': 'Mozilla/5.0 (compatible; CopilotUsageMonitor/1.1)',
+    },
+    credentials: 'omit',
+  });
+
+  if (!response.ok) {
+    var err = new Error('Page fetch error: ' + response.status);
+    err.status = response.status;
+    throw err;
+  }
+
+  var html = await response.text();
+  return parseUsageFromHtml(html);
+}
+
+function parseUsageFromHtml(html) {
+  // 1. Try __NEXT_DATA__ JSON blob
+  var nextDataMatch = html.match(/<script[^>]+id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i);
+  if (nextDataMatch) {
+    try {
+      var json = JSON.parse(nextDataMatch[1]);
+      var result = extractFromNextData(json);
+      if (result) return result;
+    } catch (e) { /* ignore parse error */ }
+  }
+
+  // 2. Try any <script> tag containing credits_used or ai_credits_used
+  var scriptMatches = html.match(/<script[^>]*>([\s\S]*?)<\/script>/gi) || [];
+  for (var i = 0; i < scriptMatches.length; i++) {
+    var scriptContent = scriptMatches[i].replace(/<\/?script[^>]*>/gi, '');
+    var jsonMatch = scriptContent.match(/\{[\s\S]*"(?:ai_credits_used|credits_used|creditsUsed)"[\s\S]*?\}/);
+    if (jsonMatch) {
+      try {
+        var parsed = JSON.parse(jsonMatch[0]);
+        var r = extractFromObject(parsed);
+        if (r) return r;
+      } catch (e) { /* ignore */ }
+    }
+  }
+
+  // 3. Fallback: regex on raw HTML text
+  var creditsMatch = html.match(/([\d,]+)\s+AI credits? used/i);
+  if (creditsMatch) {
+    var used = parseInt(creditsMatch[1].replace(/,/g, ''), 10);
+    var cycleMatch = html.match(/([A-Za-z]+ \d+[-\u2013]\d+,?\s*\d{4})/);
+    var cycleText = cycleMatch ? cycleMatch[1] : null;
+    var dates = parseCycleDates(cycleText);
+    return {
+      used: used,
+      unitType: 'credit',
+      allowance: null,
+      cycleStart: dates.start,
+      cycleEnd: dates.end,
+    };
+  }
+
+  return null;
+}
+
+function extractFromNextData(json) {
+  // Walk the object tree looking for credits_used or ai_credits_used
+  var str = JSON.stringify(json);
+  var m = str.match(/"(?:ai_credits_used|credits_used|creditsUsed)"\s*:\s*(\d+)/);
+  if (!m) return null;
+  var used = parseInt(m[1], 10);
+
+  var startM = str.match(/"(?:cycle_start|cycleStart|start_date)"\s*:\s*"([^"]+)"/);
+  var endM = str.match(/"(?:cycle_end|cycleEnd|end_date)"\s*:\s*"([^"]+)"/);
+
+  return {
+    used: used,
+    unitType: 'credit',
+    allowance: null,
+    cycleStart: startM ? startM[1] : null,
+    cycleEnd: endM ? endM[1] : null,
+  };
+}
+
+function extractFromObject(obj) {
+  var used = obj.ai_credits_used || obj.credits_used || obj.creditsUsed;
+  if (used === undefined || used === null) return null;
+  return {
+    used: Math.round(Number(used)),
+    unitType: 'credit',
+    allowance: null,
+    cycleStart: obj.cycle_start || obj.cycleStart || obj.start_date || null,
+    cycleEnd: obj.cycle_end || obj.cycleEnd || obj.end_date || null,
+  };
+}
+
+function parseCycleDates(cycleText) {
+  if (!cycleText) return { start: null, end: null };
+  var m = cycleText.match(/([A-Za-z]+)\s+(\d+)[-\u2013](\d+),?\s*(\d{4})/);
+  if (m) {
+    var monthIdx = new Date(m[1] + ' 1 2000').getMonth();
+    var year = parseInt(m[4], 10);
+    return {
+      start: new Date(year, monthIdx, parseInt(m[2], 10)).toISOString(),
+      end: new Date(year, monthIdx, parseInt(m[3], 10)).toISOString(),
+    };
+  }
+  return { start: null, end: null };
 }
 
 export async function getAuthenticatedUser(pat) {
@@ -39,6 +156,23 @@ export async function getCopilotPlan(pat, username) {
   } catch (e) {
     return null;
   }
+}
+
+/**
+ * Try the undocumented personal copilot usage endpoint.
+ * Requires a PAT with 'copilot' scope.
+ * Returns { totalUsed, cycleStart, cycleEnd, unitType } or throws.
+ */
+export async function getUserCopilotUsage(pat) {
+  var data = await githubFetch('/user/copilot/usage', pat, null, '2026-03-10');
+  var used = data.ai_credits_used || data.credits_used || data.total_credits_used || 0;
+  return {
+    totalUsed: Math.round(used),
+    cycleStart: data.start_date || data.cycle_start || null,
+    cycleEnd: data.end_date || data.cycle_end || null,
+    raw: data,
+    unitType: 'credit',
+  };
 }
 
 export async function getPremiumRequestUsage(pat, username, year, month) {
@@ -93,4 +227,4 @@ export async function getGeneralUsageFallback(pat, username, year, month) {
     return prod.includes('copilot') && (sku.includes('premium') || sku.includes('credit'));
   });
   return { totalUsed: sumGrossQuantity(items), usageItems: items, unitType: 'request' };
-}
+}
