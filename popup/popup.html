@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Copilot Usage Monitor</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <img src="../icons/icon32.png" alt="" class="logo" width="20" height="20" />
+      <span class="header-title">Copilot Usage Monitor</span>
+    </header>
+
+    <!-- Main content: usage display -->
+    <main id="main-content">
+
+      <!-- State: no token configured -->
+      <div id="state-no-token" class="state hidden">
+        <div class="empty-icon">🔑</div>
+        <p class="empty-msg">Set up your Personal Access Token to start tracking usage.</p>
+        <button class="btn btn-primary" id="btn-open-options-no-token">Open Settings</button>
+      </div>
+
+      <!-- State: auth error -->
+      <div id="state-auth-error" class="state hidden">
+        <div class="empty-icon">⚠️</div>
+        <p class="empty-msg">Token invalid or expired. Update it in Settings.</p>
+        <button class="btn btn-primary" id="btn-open-options-auth-error">Open Settings</button>
+      </div>
+
+      <!-- State: billing API unavailable (enhanced billing platform / not org admin) -->
+      <div id="state-billing-unavailable" class="state hidden">
+        <div class="empty-icon">🔒</div>
+        <p class="empty-msg">
+          GitHub's billing API is not accessible. This usually means:
+        </p>
+        <ul class="reason-list">
+          <li>Your org hasn't enabled the <strong>Enhanced Billing Platform</strong>, <strong>OR</strong></li>
+          <li>You're not an <strong>org owner / billing manager</strong></li>
+        </ul>
+        <a class="btn btn-primary" id="btn-view-github" href="https://github.com/settings/billing" target="_blank">View Usage on GitHub ↗</a>
+      </div>
+
+      <!-- State: generic error -->
+      <div id="state-error" class="state hidden">
+        <div class="empty-icon">❌</div>
+        <p class="empty-msg" id="error-message">Could not fetch usage data.</p>
+        <button class="btn btn-secondary" id="btn-refresh-error">Retry</button>
+      </div>
+
+      <!-- State: normal usage display -->
+      <div id="state-ok" class="state hidden">
+        <!-- Org-managed warning banner -->
+        <div id="org-managed-warning" class="banner warning hidden">
+          ⚠️ Org-managed license detected. Add your org name in <a href="#" id="org-settings-link">Settings</a> to see usage.
+        </div>
+
+        <div class="usage-section">
+          <div class="usage-label" id="usage-label">Premium Requests Used</div>
+          <div class="usage-numbers">
+            <span class="usage-used" id="usage-used">–</span>
+            <span class="usage-sep" id="usage-sep"> / </span>
+            <span class="usage-allowance" id="usage-allowance">–</span>
+          </div>
+
+          <!-- Progress bar -->
+          <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="progress-track">
+            <div class="progress-fill" id="progress-fill"></div>
+          </div>
+          <div class="usage-pct" id="usage-pct">0% used</div>
+        </div>
+
+        <div class="meta-section">
+          <div class="meta-row">
+            <span class="meta-label">Plan</span>
+            <span class="meta-value" id="meta-plan">–</span>
+          </div>
+          <div class="meta-row">
+            <span class="meta-label">Resets</span>
+            <span class="meta-value" id="meta-reset">–</span>
+          </div>
+          <div class="meta-row">
+            <span class="meta-label">Last updated</span>
+            <span class="meta-value" id="meta-updated">–</span>
+          </div>
+        </div>
+      </div>
+
+    </main>
+
+    <!-- Footer actions -->
+    <footer class="footer">
+      <button class="btn btn-secondary btn-sm" id="btn-refresh" title="Refresh usage now">↻ Refresh</button>
+      <button class="btn btn-ghost btn-sm" id="btn-options" title="Open settings">⚙ Settings</button>
+    </footer>
+  </div>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

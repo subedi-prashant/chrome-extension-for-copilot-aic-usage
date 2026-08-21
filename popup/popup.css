@@ -1,0 +1,174 @@
+/* ── Reset & base ─────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  width: 300px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-size: 13px;
+  color: #24292f;
+  background: #ffffff;
+}
+
+/* ── Layout ───────────────────────────────────────────────────────────────── */
+.container {
+  display: flex;
+  flex-direction: column;
+  min-height: 180px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: #f6f8fa;
+  border-bottom: 1px solid #d0d7de;
+}
+
+.logo { border-radius: 4px; }
+
+.header-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #24292f;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+main { flex: 1; padding: 14px; }
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  border-top: 1px solid #d0d7de;
+  background: #f6f8fa;
+}
+
+/* ── States ───────────────────────────────────────────────────────────────── */
+.state { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.hidden { display: none !important; }
+
+.empty-icon { font-size: 28px; }
+.empty-msg {
+  text-align: center;
+  color: #57606a;
+  line-height: 1.4;
+  font-size: 12px;
+}
+
+.reason-list {
+  font-size: 11px;
+  color: #57606a;
+  line-height: 1.6;
+  padding-left: 16px;
+  text-align: left;
+  width: 100%;
+}
+
+/* ── Usage display ────────────────────────────────────────────────────────── */
+.usage-section { margin-bottom: 14px; }
+
+.usage-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #57606a;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+
+.usage-numbers {
+  font-size: 22px;
+  font-weight: 700;
+  color: #24292f;
+  margin-bottom: 8px;
+  line-height: 1;
+}
+
+.usage-sep { color: #6e7781; font-weight: 400; }
+.usage-allowance { color: #6e7781; font-size: 18px; }
+
+/* Progress bar */
+.progress-track {
+  width: 100%;
+  height: 8px;
+  background: #eaeef2;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 4px;
+  width: 0%;
+  transition: width 0.4s ease, background-color 0.3s ease;
+  background: #2da44e;
+}
+
+.progress-fill.warn  { background: #d29922; }
+.progress-fill.high  { background: #e36209; }
+.progress-fill.max   { background: #cf222e; }
+
+.usage-pct {
+  font-size: 11px;
+  color: #6e7781;
+  text-align: right;
+}
+
+/* ── Meta info ────────────────────────────────────────────────────────────── */
+.meta-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.meta-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.meta-label { color: #57606a; }
+.meta-value { font-weight: 500; color: #24292f; text-align: right; }
+
+/* ── Banner ───────────────────────────────────────────────────────────────── */
+.banner {
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1.4;
+  margin-bottom: 10px;
+}
+.banner.warning {
+  background: #fff8c5;
+  border: 1px solid #d4a72c;
+  color: #7d4e00;
+}
+.banner.warning a { color: #7d4e00; font-weight: 600; }
+
+/* ── Buttons ──────────────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 6px 12px;
+  transition: background 0.15s ease;
+}
+
+.btn-primary   { background: #1f6feb; color: #ffffff; }
+.btn-primary:hover { background: #1158c7; }
+.btn-secondary { background: #eaeef2; color: #24292f; border: 1px solid #d0d7de; }
+.btn-secondary:hover { background: #d0d7de; }
+.btn-ghost     { background: transparent; color: #57606a; }
+.btn-ghost:hover { background: #eaeef2; color: #24292f; }
+.btn-sm        { padding: 4px 10px; font-size: 12px; }

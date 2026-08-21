@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Copilot Usage Monitor — Settings</title>
+  <link rel="stylesheet" href="options.css" />
+</head>
+<body>
+  <div class="container">
+    <header class="page-header">
+      <img src="../icons/icon48.png" alt="" width="32" height="32" />
+      <div>
+        <h1 class="page-title">Copilot Usage Monitor</h1>
+        <p class="page-subtitle">Settings</p>
+      </div>
+    </header>
+
+    <main class="content">
+
+      <!-- PAT Section -->
+      <section class="section">
+        <h2 class="section-title">Personal Access Token</h2>
+        <p class="section-desc">
+          A classic GitHub PAT with the <code>manage_billing:copilot</code> scope is required.
+          <a href="https://github.com/settings/tokens/new?scopes=manage_billing:copilot&description=Copilot+Usage+Monitor" target="_blank" rel="noopener noreferrer">Create one on GitHub →</a>
+        </p>
+
+        <div class="form-group">
+          <label class="form-label" for="pat-input">Personal Access Token</label>
+          <div class="input-row">
+            <input
+              type="password"
+              id="pat-input"
+              class="form-input"
+              placeholder="ghp_••••••••••••••••••••••••••••••••••••••"
+              autocomplete="off"
+              spellcheck="false"
+            />
+            <button class="btn btn-ghost btn-sm" id="btn-show-token" title="Show / hide token">Show</button>
+          </div>
+        </div>
+
+        <div class="connection-status" id="connection-status">
+          <!-- Populated by JS -->
+        </div>
+
+        <div class="action-row">
+          <button class="btn btn-secondary" id="btn-test">Test Connection</button>
+          <button class="btn btn-ghost btn-sm" id="btn-clear-token">Clear Token</button>
+        </div>
+      </section>
+
+      <!-- Org Section -->
+      <section class="section">
+        <h2 class="section-title">Organization <span class="badge-optional">optional</span></h2>
+        <p class="section-desc">
+          If your Copilot license is <strong>managed by an organization</strong> (you see "No monthly limit set by your organization"), enter the org's GitHub slug here. The extension will query the org-level billing API instead of the user-level API.
+        </p>
+        <div class="form-group">
+          <label class="form-label" for="org-input">Organization name (slug)</label>
+          <input
+            type="text"
+            id="org-input"
+            class="form-input"
+            placeholder="e.g. my-company"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <p class="form-hint">Find it in your org's GitHub URL: github.com/<strong>my-company</strong></p>
+        </div>
+      </section>
+
+      <!-- Plan Section -->
+      <section class="section">
+        <h2 class="section-title">Copilot Plan</h2>
+        <p class="section-desc">
+          Used to calculate your monthly allowance. "Auto-detect" attempts to read your plan
+          from the GitHub API; select manually if auto-detect fails.
+        </p>
+
+        <div class="form-group">
+          <label class="form-label" for="plan-select">Plan</label>
+          <select class="form-select" id="plan-select">
+            <option value="">Auto-detect</option>
+            <option value="pro">Copilot Pro (300 req/mo)</option>
+            <option value="pro+">Copilot Pro+ (1,500 req/mo)</option>
+            <option value="business">Copilot Business (300 req/mo)</option>
+            <option value="enterprise">Copilot Enterprise (1,000 req/mo)</option>
+          </select>
+        </div>
+      </section>
+
+      <!-- Poll Interval Section -->
+      <section class="section">
+        <h2 class="section-title">Poll Interval</h2>
+        <p class="section-desc">How often the extension checks for updated usage data.</p>
+
+        <div class="form-group">
+          <label class="form-label" for="interval-select">Interval</label>
+          <select class="form-select" id="interval-select">
+            <option value="15">Every 15 minutes</option>
+            <option value="30" selected>Every 30 minutes (recommended)</option>
+            <option value="60">Every 60 minutes</option>
+          </select>
+        </div>
+      </section>
+
+      <!-- Save -->
+      <div class="save-row">
+        <button class="btn btn-primary" id="btn-save">Save Settings</button>
+        <span class="save-feedback hidden" id="save-feedback">✓ Saved</span>
+      </div>
+
+    </main>
+
+    <footer class="page-footer">
+      <p>
+        Usage data is only available for <strong>personal Copilot plans</strong> (not org/enterprise-managed licenses).
+        Token is stored locally in your browser and never transmitted anywhere except <code>api.github.com</code>.
+      </p>
+    </footer>
+  </div>
+
+  <script type="module" src="options.js"></script>
+</body>
+</html>
