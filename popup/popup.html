@@ -14,8 +14,14 @@
       <span class="header-title">Copilot Usage Monitor</span>
     </header>
 
-    <!-- Main content: usage display -->
-    <main id="main-content">
+    <!-- Tab nav -->
+    <nav class="tab-nav" role="tablist">
+      <button class="tab-btn active" id="tab-usage" role="tab" aria-selected="true" aria-controls="panel-usage">Usage</button>
+      <button class="tab-btn" id="tab-history" role="tab" aria-selected="false" aria-controls="panel-history">History</button>
+    </nav>
+
+    <!-- ── Panel: Usage ──────────────────────────────────────────────────── -->
+    <main id="panel-usage" class="tab-panel" role="tabpanel">
 
       <!-- State: no token configured -->
       <div id="state-no-token" class="state hidden">
@@ -92,13 +98,56 @@
 
     </main>
 
+    <!-- ── Panel: History ────────────────────────────────────────────────── -->
+    <div id="panel-history" class="tab-panel hidden" role="tabpanel">
+
+      <!-- Empty state -->
+      <div id="history-empty" class="state">
+        <div class="empty-icon">📊</div>
+        <p class="empty-msg">No history yet. Usage snapshots are saved automatically on each fetch.</p>
+      </div>
+
+      <!-- History content -->
+      <div id="history-content" class="hidden">
+        <!-- Stats summary row -->
+        <div id="history-stats" class="history-stats"></div>
+
+        <!-- Line chart -->
+        <div class="chart-wrap">
+          <canvas id="usage-chart"></canvas>
+        </div>
+
+        <!-- Recent snapshots table -->
+        <div class="history-table-wrap">
+          <table class="history-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Used</th>
+                <th>Unit</th>
+                <th>Plan</th>
+              </tr>
+            </thead>
+            <tbody id="history-tbody"></tbody>
+          </table>
+        </div>
+
+        <div class="history-footer">
+          <button class="btn btn-ghost btn-sm" id="btn-clear-history">🗑 Clear History</button>
+        </div>
+      </div>
+
+    </div>
+
     <!-- Footer actions -->
-    <footer class="footer">
+    <footer class="footer" id="usage-footer">
       <button class="btn btn-secondary btn-sm" id="btn-refresh" title="Refresh usage now">↻ Refresh</button>
       <button class="btn btn-ghost btn-sm" id="btn-options" title="Open settings">⚙ Settings</button>
     </footer>
   </div>
 
+  <!-- Chart.js (UMD, no module bundler needed) -->
+  <script src="vendor/chart.umd.min.js"></script>
   <script type="module" src="popup.js"></script>
 </body>
 </html>
