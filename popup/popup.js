@@ -1,5 +1,6 @@
 import { readState } from '../shared/storage.js';
 import { PLAN_LABELS } from '../shared/constants.js';
+import { renderHistory, initHistory } from './history.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -173,4 +174,38 @@ document.addEventListener('DOMContentLoaded', async () => {
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === 'local') render();
   });
+
+  // ── Tab switching ──────────────────────────────────────────────────────────
+  const tabUsageBtn = $('tab-usage');
+  const tabHistoryBtn = $('tab-history');
+  const panelUsage = $('panel-usage');
+  const panelHistory = $('panel-history');
+  const usageFooter = $('usage-footer');
+
+  function showTab(tab) {
+    if (tab === 'history') {
+      tabUsageBtn.classList.remove('active');
+      tabUsageBtn.setAttribute('aria-selected', 'false');
+      tabHistoryBtn.classList.add('active');
+      tabHistoryBtn.setAttribute('aria-selected', 'true');
+      panelUsage.classList.add('hidden');
+      panelHistory.classList.remove('hidden');
+      usageFooter.classList.add('hidden');
+      // Always re-render history to pick up latest snapshots
+      renderHistory();
+    } else {
+      tabHistoryBtn.classList.remove('active');
+      tabHistoryBtn.setAttribute('aria-selected', 'false');
+      tabUsageBtn.classList.add('active');
+      tabUsageBtn.setAttribute('aria-selected', 'true');
+      panelHistory.classList.add('hidden');
+      panelUsage.classList.remove('hidden');
+      usageFooter.classList.remove('hidden');
+    }
+  }
+
+  tabUsageBtn.addEventListener('click', () => showTab('usage'));
+  tabHistoryBtn.addEventListener('click', () => showTab('history'));
+
+  initHistory();
 });
