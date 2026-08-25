@@ -1,4 +1,5 @@
 import { readState, updateState } from '../shared/storage.js';
+import { appendSnapshot } from '../shared/db.js';
 import {
   getAuthenticatedUser, getCopilotPlan, getUserCopilotUsage,
   getPremiumRequestUsage, getAiCreditUsage, getGeneralUsageFallback,
@@ -65,6 +66,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (d && d.used !== null && d.used !== undefined) {
       var tabId = _sender && _sender.tab ? _sender.tab.id : null;
 
+      var scrapeTs = d.scrapedAt || Date.now();
       updateState({
         status: 'ok',
         used: d.used,
@@ -72,11 +74,25 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         allowance: d.allowance || null,
         cycleStart: d.cycleStart || null,
         resetDate: d.cycleEnd || null,
-        fetchedAt: d.scrapedAt || Date.now(),
+        fetchedAt: scrapeTs,
         source: 'scrape',
         errorMessage: null,
       }).then(function() {
         return updateBadge({ status: 'ok', used: d.used, allowance: d.allowance || null });
+      }).then(function() {
+        return readState().then(function(st) {
+          return appendSnapshot({
+            fetchedAt: scrapeTs,
+            used: d.used,
+            allowance: d.allowance || null,
+            unitType: d.unitType || 'credit',
+            plan: st.plan || st.planOverride || 'unknown',
+            cycleStart: d.cycleStart || null,
+            cycleEnd: d.cycleEnd || null,
+            source: 'scrape',
+            username: st.username || '',
+          });
+        });
       }).then(function() {
         // Close the auto-opened background tab if this result came from it
         if (tabId !== null && tabId === _autoTabId) {
@@ -244,6 +260,17 @@ export async function fetchAndCache() {
 
     await updateState(cachePayload);
     await updateBadge(cachePayload);
+    await appendSnapshot({
+      fetchedAt: cachePayload.fetchedAt,
+      used: cachePayload.used,
+      allowance: cachePayload.allowance,
+      unitType: cachePayload.unitType,
+      plan: cachePayload.plan,
+      cycleStart: cachePayload.cycleStart,
+      cycleEnd: cachePayload.resetDate,
+      source: cachePayload.source,
+      username: cachePayload.username,
+    });
   } catch (err) {
     var status = 'error';
     if (err.status === 401 || err.status === 403) status = 'auth_error';
