@@ -10,8 +10,11 @@ const DB_NAME = 'copilotUsageHistory';
 const DB_VERSION = 1;
 const STORE = 'snapshots';
 
-/** One snapshot per hour — dedup window in milliseconds */
-const DEDUP_WINDOW_MS = 60 * 60 * 1000;
+/** Returns the Unix timestamp for midnight UTC on the day of `ts`. */
+function startOfUtcDay(ts) {
+  const d = new Date(ts);
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+}
 
 let _db = null;
 
@@ -46,8 +49,8 @@ function openDb() {
 }
 
 /**
- * Append a usage snapshot to the store, skipping if a snapshot already exists
- * within DEDUP_WINDOW_MS of the given fetchedAt timestamp.
+ * Upsert a daily usage snapshot. Updates today's existing record if present,
+ * otherwise inserts a new one.
  *
  * @param {{
  *   fetchedAt: number,
@@ -66,29 +69,22 @@ export async function appendSnapshot(snapshot) {
   if (snapshot.used === null || snapshot.used === undefined) return;
 
   const db = await openDb();
-  const windowStart = (snapshot.fetchedAt || Date.now()) - DEDUP_WINDOW_MS;
+  const now = snapshot.fetchedAt || Date.now();
+  const dayStart = startOfUtcDay(now);
 
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, 'readwrite');
     const store = tx.objectStore(STORE);
     const idx = store.index('fetchedAt');
 
-    // Check for a recent duplicate within the dedup window.
-    // Using 'prev' (reverse) order ensures we check the most recent snapshot first.
-    // If any snapshot exists within DEDUP_WINDOW_MS of the new timestamp, skip insertion.
-    const range = IDBKeyRange.lowerBound(windowStart);
+    // Find the latest snapshot from today (fetchedAt >= start of today UTC).
+    const range = IDBKeyRange.lowerBound(dayStart);
     const cursorReq = idx.openCursor(range, 'prev');
 
     cursorReq.onsuccess = (event) => {
       const cursor = event.target.result;
-      if (cursor) {
-        // A snapshot exists within the window — skip
-        resolve();
-        return;
-      }
-      // No recent duplicate — insert
-      const record = {
-        fetchedAt: snapshot.fetchedAt || Date.now(),
+      const fields = {
+        fetchedAt: now,
         used: snapshot.used,
         allowance: snapshot.allowance ?? null,
         unitType: snapshot.unitType || 'credit',
@@ -98,7 +94,16 @@ export async function appendSnapshot(snapshot) {
         source: snapshot.source || 'api',
         username: snapshot.username || '',
       };
-      const addReq = store.add(record);
+
+      if (cursor) {
+        // Today's snapshot exists — update it in-place
+        const putReq = cursor.update({ ...cursor.value, ...fields });
+        putReq.onsuccess = () => resolve();
+        putReq.onerror = () => reject(putReq.error);
+        return;
+      }
+      // No snapshot for today yet — insert
+      const addReq = store.add(fields);
       addReq.onsuccess = () => resolve();
       addReq.onerror = () => reject(addReq.error);
     };
