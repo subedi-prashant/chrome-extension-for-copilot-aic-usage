@@ -144,6 +144,53 @@ export async function getSnapshots(limit = 500) {
 }
 
 /**
+ * Remove duplicate hourly snapshots, keeping only the latest record per UTC day.
+ * Returns the number of records deleted.
+ * @returns {Promise<number>}
+ */
+export async function pruneToLastDailySnapshot() {
+  const db = await openDb();
+
+  // Collect all records (id + fetchedAt is enough to decide what to delete)
+  const all = await new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readonly');
+    const req = tx.objectStore(STORE).getAll();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+    tx.onerror = () => reject(tx.error);
+  });
+
+  // Group by UTC day; track the id of the latest snapshot per day
+  const latestIdByDay = new Map();
+  for (const row of all) {
+    const day = startOfUtcDay(row.fetchedAt);
+    const current = latestIdByDay.get(day);
+    if (current === undefined || row.fetchedAt > current.fetchedAt) {
+      latestIdByDay.set(day, { id: row.id, fetchedAt: row.fetchedAt });
+    }
+  }
+
+  const keepIds = new Set([...latestIdByDay.values()].map(v => v.id));
+  const toDelete = all.map(r => r.id).filter(id => !keepIds.has(id));
+
+  if (toDelete.length === 0) return 0;
+
+  await new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readwrite');
+    const store = tx.objectStore(STORE);
+    let pending = toDelete.length;
+    for (const id of toDelete) {
+      const req = store.delete(id);
+      req.onerror = () => reject(req.error);
+      req.onsuccess = () => { if (--pending === 0) resolve(); };
+    }
+    tx.onerror = () => reject(tx.error);
+  });
+
+  return toDelete.length;
+}
+
+/**
  * Delete all stored snapshots.
  * @returns {Promise<void>}
  */
