@@ -1,4 +1,4 @@
-import { getSnapshots, clearSnapshots } from '../shared/db.js';
+import { getSnapshots } from '../shared/db.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -7,7 +7,8 @@ const CHART_COLOR = '#1f6feb';
 const CHART_COLOR_ALPHA = 'rgba(31,111,235,0.12)';
 
 let _chart = null;
-let _initialized = false;
+let _chartType = 'line';
+let _lastSnapshots = null;
 
 /**
  * Format a timestamp for the chart X-axis label.
@@ -57,7 +58,7 @@ function renderChart(snapshots) {
   const data = chartData.map(s => s.dailyUsed);
 
   _chart = new Chart(canvas, {
-    type: 'line',
+    type: _chartType,
     data: {
       labels,
       datasets: [
@@ -69,8 +70,8 @@ function renderChart(snapshots) {
           borderWidth: 2,
           pointRadius: chartData.length > 60 ? 0 : 3,
           pointHoverRadius: 5,
-          fill: true,
-          tension: 0.3,
+          fill: _chartType === 'line',
+          tension: _chartType === 'line' ? 0.3 : 0,
         },
       ],
     },
@@ -191,6 +192,7 @@ export async function renderHistory() {
 
     renderChart(withDeltas);
     renderStats(withDeltas);
+    _lastSnapshots = withDeltas;
     renderTable([...withDeltas].reverse()); // table stays newest-first
   } catch (err) {
     emptyEl.classList.remove('hidden');
@@ -200,16 +202,15 @@ export async function renderHistory() {
 }
 
 /**
- * Wire up the Clear History button.
+ * Wire up the chart toggle button.
  */
 export function initHistory() {
-  const clearBtn = $('btn-clear-history');
-  if (clearBtn) {
-    clearBtn.addEventListener('click', async () => {
-      if (!confirm('Clear all stored history snapshots?')) return;
-      await clearSnapshots();
-      if (_chart) { _chart.destroy(); _chart = null; }
-      await renderHistory();
+  const toggleBtn = $('btn-toggle-chart');
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', () => {
+      _chartType = _chartType === 'line' ? 'bar' : 'line';
+      toggleBtn.textContent = _chartType === 'line' ? '📊 Bar Chart' : '📈 Line Chart';
+      if (_lastSnapshots) renderChart(_lastSnapshots);
     });
   }
 }
