@@ -1,7 +1,7 @@
 import { readState, updateState, clearState } from '../shared/storage.js';
 import { getAuthenticatedUser } from '../shared/api.js';
 import { DEFAULT_POLL_INTERVAL_MINUTES } from '../shared/constants.js';
-import { pruneToLastDailySnapshot } from '../shared/db.js';
+import { pruneToLastDailySnapshot, clearSnapshots } from '../shared/db.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -150,6 +150,25 @@ async function pruneSnapshots() {
   btn.textContent = 'Clean Up Old Snapshots';
 }
 
+// ── Clear History ─────────────────────────────────────────────────────────────
+
+async function clearHistory() {
+  if (!confirm('Permanently delete all usage history snapshots? This cannot be undone.')) return;
+  const btn = $('btn-clear-history');
+  const feedback = $('clear-history-feedback');
+  btn.disabled = true;
+  try {
+    await clearSnapshots();
+    feedback.textContent = '✓ History cleared';
+    feedback.classList.remove('hidden');
+    setTimeout(() => feedback.classList.add('hidden'), 3000);
+  } catch (err) {
+    feedback.textContent = `✗ Error: ${err.message}`;
+    feedback.classList.remove('hidden');
+  }
+  btn.disabled = false;
+}
+
 // ── Wire up ───────────────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -160,4 +179,5 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('btn-clear-token').addEventListener('click', clearToken);
   $('btn-show-token').addEventListener('click', toggleTokenVisibility);
   $('btn-prune').addEventListener('click', pruneSnapshots);
+  $('btn-clear-history').addEventListener('click', clearHistory);
 });
