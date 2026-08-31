@@ -1,6 +1,7 @@
 import { readState, updateState, clearState } from '../shared/storage.js';
 import { getAuthenticatedUser } from '../shared/api.js';
 import { DEFAULT_POLL_INTERVAL_MINUTES } from '../shared/constants.js';
+import { pruneToLastDailySnapshot } from '../shared/db.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -129,6 +130,26 @@ function toggleTokenVisibility() {
   }
 }
 
+// ── Prune duplicate snapshots ─────────────────────────────────────────────────
+
+async function pruneSnapshots() {
+  const btn = $('btn-prune');
+  const feedback = $('prune-feedback');
+  btn.disabled = true;
+  btn.textContent = 'Cleaning…';
+  try {
+    const deleted = await pruneToLastDailySnapshot();
+    feedback.textContent = deleted > 0 ? `✓ Removed ${deleted} old snapshot(s)` : '✓ Nothing to clean up';
+    feedback.classList.remove('hidden');
+    setTimeout(() => feedback.classList.add('hidden'), 3000);
+  } catch (err) {
+    feedback.textContent = `✗ Error: ${err.message}`;
+    feedback.classList.remove('hidden');
+  }
+  btn.disabled = false;
+  btn.textContent = 'Clean Up Old Snapshots';
+}
+
 // ── Wire up ───────────────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -138,4 +159,5 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('btn-save').addEventListener('click', saveSettings);
   $('btn-clear-token').addEventListener('click', clearToken);
   $('btn-show-token').addEventListener('click', toggleTokenVisibility);
+  $('btn-prune').addEventListener('click', pruneSnapshots);
 });
