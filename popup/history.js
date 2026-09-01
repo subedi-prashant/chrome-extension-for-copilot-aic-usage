@@ -34,10 +34,15 @@ function fmtShort(ts) {
 
 /** First entry is always null — no baseline exists for the oldest record. */
 function toDailyDeltas(chronological) {
-  return chronological.map((s, i) => ({
-    ...s,
-    dailyUsed: i === 0 ? null : Math.max(0, s.used - chronological[i - 1].used),
-  }));
+  return chronological.map((s, i) => {
+    if (i === 0) return { ...s, dailyUsed: null };
+    const prev = chronological[i - 1];
+    const delta = s.used - prev.used;
+    // Billing cycle reset: counter dropped or cycleStart changed — use full value as day's usage
+    const cycleReset = delta < 0
+      || (s.cycleStart && prev.cycleStart && s.cycleStart !== prev.cycleStart);
+    return { ...s, dailyUsed: cycleReset ? s.used : delta };
+  });
 }
 
 /**
