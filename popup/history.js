@@ -9,6 +9,7 @@ const CHART_COLOR_ALPHA = 'rgba(31,111,235,0.12)';
 
 let _chart = null;
 let _chartType = 'line';
+let _range = 'daily';
 let _lastSnapshots = null;
 
 /**
@@ -33,6 +34,14 @@ function fmtShort(ts) {
   return new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
+/**
+ * Format a timestamp as a short month+year for the monthly chart view.
+ * @param {number} ts
+ */
+function fmtMonth(ts) {
+  return new Date(ts).toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
+}
+
 /** First entry is always null — no baseline exists for the oldest record. */
 function toDailyDeltas(chronological) {
   return chronological.map((s, i) => {
@@ -44,6 +53,33 @@ function toDailyDeltas(chronological) {
       || (s.cycleStart && prev.cycleStart && s.cycleStart !== prev.cycleStart);
     return { ...s, dailyUsed: cycleReset ? s.used : delta };
   });
+}
+
+/**
+ * Collapse per-day deltas into one summed bucket per calendar month.
+ * @param {Array} dailySnapshots Ordered oldest→newest, with `dailyUsed` already computed
+ * @returns {Array} Ordered oldest→newest, one entry per month
+ */
+function toMonthlyBuckets(dailySnapshots) {
+  const buckets = new Map();
+
+  for (const s of dailySnapshots) {
+    if (s.dailyUsed === null) continue;
+    const d = new Date(s.fetchedAt);
+    const key = d.getFullYear() * 12 + d.getMonth();
+    const bucket = buckets.get(key);
+    if (bucket) {
+      bucket.dailyUsed += s.dailyUsed;
+      bucket.fetchedAt = s.fetchedAt;
+      bucket.unitType = s.unitType;
+      bucket.plan = s.plan;
+      bucket.source = s.source;
+    } else {
+      buckets.set(key, { ...s });
+    }
+  }
+
+  return [...buckets.entries()].sort(([a], [b]) => a - b).map(([, bucket]) => bucket);
 }
 
 /**
@@ -59,8 +95,10 @@ function renderChart(snapshots) {
     _chart = null;
   }
 
-  const chartData = snapshots.filter(s => s.dailyUsed !== null);
-  const labels = chartData.map(s => fmtShort(s.fetchedAt));
+  const isMonthly = _range === 'monthly';
+  const fmtLabel = isMonthly ? fmtMonth : fmtShort;
+  const chartData = isMonthly ? toMonthlyBuckets(snapshots) : snapshots.filter(s => s.dailyUsed !== null);
+  const labels = chartData.map(s => fmtLabel(s.fetchedAt));
   const data = chartData.map(s => s.dailyUsed);
 
   _chart = new Chart(canvas, {
@@ -69,7 +107,7 @@ function renderChart(snapshots) {
       labels,
       datasets: [
         {
-          label: 'Daily Usage',
+          label: isMonthly ? 'Monthly Usage' : 'Daily Usage',
           data,
           borderColor: CHART_COLOR,
           backgroundColor: CHART_COLOR_ALPHA,
@@ -108,7 +146,7 @@ function renderChart(snapshots) {
             maxTicksLimit: 8,
             maxRotation: 30,
             font: { size: 10 },
-            callback: (_, i) => chartData[i] ? fmtShort(chartData[i].fetchedAt) : '',
+            callback: (_, i) => chartData[i] ? fmtLabel(chartData[i].fetchedAt) : '',
           },
           grid: { color: '#eaeef2' },
         },
@@ -147,21 +185,28 @@ function renderStats(snapshots) {
 }
 
 /**
- * Render the history table of recent snapshots.
- * @param {Array} snapshots Ordered newest→oldest (as returned from db)
+ * Render the history table of recent snapshots, following the daily/monthly range toggle.
+ * @param {Array} snapshots Ordered oldest→newest, with `dailyUsed` already computed
  */
 function renderTable(snapshots) {
   const tbody = $('history-tbody');
   if (!tbody) return;
   tbody.innerHTML = '';
 
-  const recent = snapshots.slice(0, 20);
+  const isMonthly = _range === 'monthly';
+  $('col-date').textContent = isMonthly ? 'Month' : 'Date';
+  $('col-used').textContent = isMonthly ? 'Monthly Used' : 'Daily Used';
+
+  const fmtLabel = isMonthly ? fmtMonth : fmtShort;
+  const rows = isMonthly ? toMonthlyBuckets(snapshots) : snapshots.filter(s => s.dailyUsed !== null);
+  const recent = [...rows].reverse().slice(0, 20);
+
   for (const s of recent) {
     const tr = document.createElement('tr');
-    const daily = s.dailyUsed !== null ? s.dailyUsed.toLocaleString() : '—';
+    const used = s.dailyUsed !== null ? s.dailyUsed.toLocaleString() : '—';
     tr.innerHTML =
-      `<td>${fmtShort(s.fetchedAt)}</td>` +
-      `<td class="num">${daily}</td>` +
+      `<td>${fmtLabel(s.fetchedAt)}</td>` +
+      `<td class="num">${used}</td>` +
       `<td>${s.unitType === 'credit' ? 'Credits' : 'Requests'}</td>` +
       `<td>${s.plan}</td>`;
     tbody.appendChild(tr);
@@ -194,8 +239,8 @@ export async function renderHistory() {
 
     renderChart(withDeltas);
     renderStats(withDeltas);
+    renderTable(withDeltas);
     _lastSnapshots = withDeltas;
-    renderTable([...withDeltas].reverse()); // table stays newest-first
   } catch (err) {
     emptyEl.classList.remove('hidden');
     emptyEl.querySelector('p').textContent = 'Could not load history: ' + err.message;
@@ -213,7 +258,7 @@ function setToggleButtonLabel(toggleBtn) {
 }
 
 /**
- * Wire up the chart toggle button.
+ * Wire up the chart toggle button and the daily/monthly range radios.
  */
 export function initHistory() {
   const toggleBtn = $('btn-toggle-chart');
@@ -223,6 +268,19 @@ export function initHistory() {
       _chartType = _chartType === 'line' ? 'bar' : 'line';
       setToggleButtonLabel(toggleBtn);
       if (_lastSnapshots) renderChart(_lastSnapshots);
+    });
+  }
+
+  const rangeInputs = document.querySelectorAll('input[name="chart-range"]');
+  for (const input of rangeInputs) {
+    input.addEventListener('change', () => {
+      if (!input.checked) return;
+      _range = input.value;
+      $('chart-heading').textContent = _range === 'monthly' ? 'Monthly Usage' : 'Daily Usage';
+      if (_lastSnapshots) {
+        renderChart(_lastSnapshots);
+        renderTable(_lastSnapshots);
+      }
     });
   }
 }
