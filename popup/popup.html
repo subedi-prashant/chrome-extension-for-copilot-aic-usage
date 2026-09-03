@@ -126,7 +126,15 @@
         <div id="history-stats" class="history-stats"></div>
 
         <!-- Line chart -->
-        <h3 class="section-heading">Daily Usage</h3>
+        <div class="chart-header">
+          <h3 class="section-heading" id="chart-heading">Daily Usage</h3>
+          <div class="range-toggle" role="radiogroup" aria-label="Chart range">
+            <input type="radio" name="chart-range" id="range-daily" value="daily" checked>
+            <label for="range-daily">Daily</label>
+            <input type="radio" name="chart-range" id="range-monthly" value="monthly">
+            <label for="range-monthly">Monthly</label>
+          </div>
+        </div>
         <div class="chart-wrap">
           <canvas id="usage-chart"></canvas>
         </div>
@@ -136,8 +144,8 @@
           <table class="history-table">
             <thead>
               <tr>
-                <th>Date</th>
-                <th>Daily Used</th>
+                <th id="col-date">Date</th>
+                <th id="col-used">Daily Used</th>
                 <th>Unit</th>
                 <th>Plan</th>
               </tr>

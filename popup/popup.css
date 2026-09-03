@@ -292,6 +292,52 @@ body {
   margin-bottom: 6px;
 }
 
+.chart-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.chart-header .section-heading { margin-bottom: 0; }
+
+/* Segmented daily/monthly control, backed by real radio inputs for a11y+keyboard support */
+.range-toggle {
+  position: relative;
+  display: inline-flex;
+  border: 1px solid #d8dee4;
+  border-radius: 999px;
+  padding: 2px;
+  background: #f6f8fa;
+}
+
+.range-toggle input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+
+.range-toggle label {
+  padding: 3px 10px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #57606a;
+  border-radius: 999px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.range-toggle input[type="radio"]:checked + label {
+  background: #1f6feb;
+  color: #ffffff;
+}
+
+.range-toggle input[type="radio"]:focus-visible + label {
+  outline: 2px solid #0969da;
+  outline-offset: 1px;
+}
+
 .chart-wrap {
   position: relative;
   height: 175px;
