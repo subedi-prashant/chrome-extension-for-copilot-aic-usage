@@ -1,4 +1,5 @@
 import { getSnapshots } from '../shared/db.js';
+import { BAR_CHART_ICON, LINE_CHART_ICON } from './icons.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -115,12 +116,6 @@ function renderChart(snapshots) {
           beginAtZero: true,
           ticks: { font: { size: 10 } },
           grid: { color: '#eaeef2' },
-          title: {
-            display: true,
-            text: 'Daily Usage',
-            font: { size: 10 },
-            color: '#57606a',
-          },
         },
       },
     },
@@ -144,9 +139,11 @@ function renderStats(snapshots) {
     : null;
 
   statsEl.innerHTML =
-    `<span><b>${snapshots.length}</b> snapshots</span>` +
-    (peak ? `<span>Peak <b>${peak.dailyUsed.toLocaleString()}</b>/day on ${fmtShort(peak.fetchedAt)}</span>` : '') +
-    `<span>Over <b>${span || 1}d</b></span>`;
+    `<div class="stat-block"><span class="stat-value">${snapshots.length}</span><span class="stat-label">Snapshots</span></div>` +
+    (peak
+      ? `<div class="stat-block"><span class="stat-value accent-blue">${peak.dailyUsed.toLocaleString()}</span><span class="stat-label">Peak / day</span><span class="stat-sub">on ${fmtShort(peak.fetchedAt)}</span></div>`
+      : `<div class="stat-block"><span class="stat-value accent-blue">–</span><span class="stat-label">Peak / day</span></div>`) +
+    `<div class="stat-block"><span class="stat-value accent-purple">${span || 1}d</span><span class="stat-label">Over</span></div>`;
 }
 
 /**
@@ -207,14 +204,24 @@ export async function renderHistory() {
 }
 
 /**
+ * Sync the toggle button's icon + label to the current chart type.
+ */
+function setToggleButtonLabel(toggleBtn) {
+  toggleBtn.innerHTML = _chartType === 'line'
+    ? `${BAR_CHART_ICON}Bar Chart`
+    : `${LINE_CHART_ICON}Line Chart`;
+}
+
+/**
  * Wire up the chart toggle button.
  */
 export function initHistory() {
   const toggleBtn = $('btn-toggle-chart');
   if (toggleBtn) {
+    setToggleButtonLabel(toggleBtn);
     toggleBtn.addEventListener('click', () => {
       _chartType = _chartType === 'line' ? 'bar' : 'line';
-      toggleBtn.textContent = _chartType === 'line' ? '📊 Bar Chart' : '📈 Line Chart';
+      setToggleButtonLabel(toggleBtn);
       if (_lastSnapshots) renderChart(_lastSnapshots);
     });
   }

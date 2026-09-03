@@ -1,6 +1,7 @@
 import { readState } from '../shared/storage.js';
 import { PLAN_LABELS } from '../shared/constants.js';
 import { renderHistory, initHistory } from './history.js';
+import { CHECK_ICON } from './icons.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -44,13 +45,13 @@ async function render() {
   // Normal display (status === 'ok' or still loading with cached data)
   $('state-ok').classList.remove('hidden');
 
-  // Show data-source notice
+  // Show data-source info as a hover tooltip instead of a banner, so the usage section sits flush at the top
   const scrapeNotice = $('scrape-notice');
   if (state.source === 'scrape') {
-    scrapeNotice.textContent = '📋 Data read from your open GitHub tab. Auto-refreshed when you visit github.com/settings/copilot.';
+    scrapeNotice.title = 'Data read from your open GitHub tab. Auto-refreshed when you visit github.com/settings/copilot.';
     scrapeNotice.classList.remove('hidden');
   } else if (state.source === 'page') {
-    scrapeNotice.textContent = '🔄 Data fetched in background from GitHub settings. Auto-refreshes every 30 min.';
+    scrapeNotice.title = 'Data fetched in background from GitHub settings. Auto-refreshes every 30 min.';
     scrapeNotice.classList.remove('hidden');
   } else {
     scrapeNotice.classList.add('hidden');
@@ -68,11 +69,13 @@ async function render() {
   $('usage-used').textContent = used.toLocaleString();
 
   if (isUnlimited) {
-    // No cap — hide the "/ allowance" and progress bar, show a note instead
+    // No cap — hide the "/ allowance" and progress bar, show a badge pill instead
     $('usage-sep').classList.add('hidden');
     $('usage-allowance').classList.add('hidden');
     $('progress-track').classList.add('hidden');
-    $('usage-pct').textContent = isCredits ? 'No monthly limit set' : 'Unlimited';
+    const pctEl = $('usage-pct');
+    pctEl.classList.add('unlimited');
+    pctEl.innerHTML = `<span class="badge-pill success">${CHECK_ICON}${isCredits ? 'No monthly limit set' : 'Unlimited'}</span>`;
   } else {
     $('usage-sep').classList.remove('hidden');
     $('usage-allowance').classList.remove('hidden');
@@ -82,7 +85,9 @@ async function render() {
     const pctDisplay = Math.round(pct * 100);
 
     $('usage-allowance').textContent = allowance.toLocaleString();
-    $('usage-pct').textContent = `${pctDisplay}% used`;
+    const pctEl = $('usage-pct');
+    pctEl.classList.remove('unlimited');
+    pctEl.textContent = `${pctDisplay}% used`;
 
     const fill = $('progress-fill');
     fill.style.width = `${pctDisplay}%`;
@@ -135,7 +140,8 @@ async function render() {
 
 async function triggerRefresh() {
   const btn = $('btn-refresh');
-  btn.textContent = '…';
+  const label = $('btn-refresh-label');
+  label.textContent = '…';
   btn.disabled = true;
 
   try {
@@ -150,7 +156,7 @@ async function triggerRefresh() {
     // Silently continue — render() will show the error state
   }
 
-  btn.textContent = '↻ Refresh';
+  label.textContent = 'Refresh';
   btn.disabled = false;
   await render();
 }
