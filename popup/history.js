@@ -56,27 +56,20 @@ function toDailyDeltas(chronological) {
 }
 
 /**
- * Collapse per-day deltas into one summed bucket per calendar month.
- * @param {Array} dailySnapshots Ordered oldest→newest, with `dailyUsed` already computed
+ * Reduce snapshots to one entry per calendar month, keyed on each month's
+ * last reading. `used` is a cumulative running total for the billing cycle,
+ * so a month's total is simply its last snapshot — summing daily deltas
+ * would undercount months with partial/sparse snapshot data.
+ * @param {Array} dailySnapshots Ordered oldest→newest
  * @returns {Array} Ordered oldest→newest, one entry per month
  */
 function toMonthlyBuckets(dailySnapshots) {
   const buckets = new Map();
 
   for (const s of dailySnapshots) {
-    if (s.dailyUsed === null) continue;
     const d = new Date(s.fetchedAt);
     const key = d.getFullYear() * 12 + d.getMonth();
-    const bucket = buckets.get(key);
-    if (bucket) {
-      bucket.dailyUsed += s.dailyUsed;
-      bucket.fetchedAt = s.fetchedAt;
-      bucket.unitType = s.unitType;
-      bucket.plan = s.plan;
-      bucket.source = s.source;
-    } else {
-      buckets.set(key, { ...s });
-    }
+    buckets.set(key, { ...s, dailyUsed: s.used });
   }
 
   return [...buckets.entries()].sort(([a], [b]) => a - b).map(([, bucket]) => bucket);
