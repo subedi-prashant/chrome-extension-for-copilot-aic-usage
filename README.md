@@ -4,6 +4,14 @@ A Chrome extension (Manifest V3) that displays your **GitHub Copilot premium req
 
 ---
 
+## About
+
+Copilot Usage Monitor is a privacy-focused Chrome extension for tracking GitHub Copilot premium request usage from the browser toolbar. It shows current consumption, allowance, reset timing, and usage history while keeping the personal access token in Chrome's local storage and sending requests only to GitHub's API.
+
+**Repository topics:** `chrome-extension` `github-copilot` `usage-monitor` `manifest-v3` `github-api` `privacy`
+
+---
+
 ## Features
 
 - 🔢 **Live badge** showing requests used, color-coded by consumption level
