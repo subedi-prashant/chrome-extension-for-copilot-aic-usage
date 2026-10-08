@@ -141,10 +141,11 @@ export async function fetchAndCache() {
     const org = state.org || null;
     let usageResult;
 
-    // ── Step 0: Fetch the settings page HTML directly (works for all plan types
-    //   including org-managed users). Falls back to billing API cascade if it fails.
+    // ── Step 0: Silently fetch the settings page HTML using the user's github.com
+    //   session cookie (works for all plan types including org-managed users, no
+    //   tab needed). Falls back to the API cascade if it fails or isn't signed in.
     try {
-      var pageResult = await scrapeSettingsPageViaFetch(pat);
+      var pageResult = await scrapeSettingsPageViaFetch();
       if (pageResult && pageResult.used !== null && pageResult.used !== undefined) {
         usageResult = {
           totalUsed: pageResult.used,
@@ -157,8 +158,7 @@ export async function fetchAndCache() {
         };
       }
     } catch (e0) {
-      if (e0.status === 401 || e0.status === 403) throw e0;
-      // Page fetch failed — continue to API cascade
+      // Page fetch failed or not signed in to github.com — continue to API cascade
     }
 
     // ── Step 1: Undocumented personal usage API (if Step 0 got nothing)
