@@ -33,28 +33,47 @@ function sumGrossQuantity(items) {
 }
 
 /**
- * Fetch github.com/settings/copilot HTML using the PAT and extract usage data
- * from the embedded server-side JSON (__NEXT_DATA__ or similar script tags).
- * This works for any Copilot plan including org-managed users.
+ * Fetch github.com/settings/copilot HTML silently using the user's existing
+ * github.com browser session (cookies) and extract usage data from it.
+ * The PAT is intentionally NOT sent — the web UI authenticates via session
+ * cookie. Works for any Copilot plan including org-managed users.
+ *
+ * Throws an error with no `status` when the user isn't signed in to github.com
+ * so callers can fall through to the API cascade instead of treating it as a
+ * PAT auth failure.
  */
-export async function scrapeSettingsPageViaFetch(pat) {
+export async function scrapeSettingsPageViaFetch() {
   var response = await fetch(GITHUB_WEB_BASE + '/settings/copilot', {
-    headers: {
-      Authorization: 'token ' + pat,
-      Accept: 'text/html,application/xhtml+xml',
-      'User-Agent': 'Mozilla/5.0 (compatible; CopilotUsageMonitor/1.1)',
-    },
-    credentials: 'omit',
+    headers: { Accept: 'text/html,application/xhtml+xml' },
+    credentials: 'include',
+    redirect: 'follow',
   });
 
   if (!response.ok) {
     var err = new Error('Page fetch error: ' + response.status);
-    err.status = response.status;
+    if (response.status !== 401 && response.status !== 403) {
+      err.status = response.status;
+    }
     throw err;
+  }
+
+  var finalPath = new URL(response.url).pathname;
+  if (finalPath === '/login' || finalPath === '/session' || finalPath.indexOf('/login/') === 0) {
+    throw new Error('NOT_SIGNED_IN_TO_GITHUB_WEB');
   }
 
   var html = await response.text();
   return parseUsageFromHtml(html);
+}
+
+function htmlToText(html) {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/\s+/g, ' ');
 }
 
 function parseUsageFromHtml(html) {
@@ -83,10 +102,11 @@ function parseUsageFromHtml(html) {
   }
 
   // 3. Fallback: regex on raw HTML text
-  var creditsMatch = html.match(/([\d,]+)\s+AI credits? used/i);
+  var text = htmlToText(html);
+  var creditsMatch = text.match(/([\d,]+)\s+AI credits? used/i);
   if (creditsMatch) {
     var used = parseInt(creditsMatch[1].replace(/,/g, ''), 10);
-    var cycleMatch = html.match(/([A-Za-z]+ \d+[-\u2013]\d+,?\s*\d{4})/);
+    var cycleMatch = text.match(/([A-Za-z]+ \d+\s*[-\u2013]\s*\d+,?\s*\d{4})/);
     var cycleText = cycleMatch ? cycleMatch[1] : null;
     var dates = parseCycleDates(cycleText);
     return {
@@ -134,7 +154,7 @@ function extractFromObject(obj) {
 
 function parseCycleDates(cycleText) {
   if (!cycleText) return { start: null, end: null };
-  var m = cycleText.match(/([A-Za-z]+)\s+(\d+)[-\u2013](\d+),?\s*(\d{4})/);
+  var m = cycleText.match(/([A-Za-z]+)\s+(\d+)\s*[-\u2013]\s*(\d+),?\s*(\d{4})/);
   if (m) {
     var monthIdx = new Date(m[1] + ' 1 2000').getMonth();
     var year = parseInt(m[4], 10);
